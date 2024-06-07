@@ -2,6 +2,7 @@ import aiohttp, asyncio, json, os, re
 from aiohttp_socks import ProxyConnector
 from yarl import URL
 from html import unescape
+from typing import Literal
 class accuweather_api:
     def __init__(self, cache_file_name: str = "cache.json"):
         self.cache = cache_file_name
@@ -12,6 +13,7 @@ class accuweather_api:
         headers = {
             'accept': '*/*',
             'accept-language': 'en-US,en;q=0.8',
+            'Cookie': f"awx_user=tp:{self.unit}",
             'priority': 'u=1, i',
             'referer': 'https://www.accuweather.com/',
             'sec-ch-ua': '"Brave";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
@@ -49,13 +51,14 @@ class accuweather_api:
         else:
             print('found key in cache')
         url = 'https://www.accuweather.com/web-api/three-day-redirect'
-
-        async with self.session.get(URL(f"{url}?key={key}",encoded=True), proxy=self.proxy, headers=headers) as r:
-            response = await r.text("utf-8")
+        async with self.session.get(URL(f"{url}?key={key}",encoded=True), proxy=self.proxy, headers=headers,) as r:
+            response = await r.text("utf-8")    
         info = {}
         bigmappattern = r"https://api\.accuweather\.com/maps/v1/radar/static/(?:.*?)base_data=radar"
         bigmap = unescape(re.search(bigmappattern, response).group(0))
         info['clouds_map'] = bigmap
+        if self.darkmap:
+            info['clouds_map'] += "&theme=dark"
         futurespattern = r"<a class=\"daily-list-item (?:has-alerts)?\" href=\"(.*?)\">([\s\S]*?)</a>"
         futureweathers = re.findall(futurespattern, response)
         daypattern = re.compile(r"<p class=\"day\">(.*?)</p>")
@@ -80,8 +83,8 @@ class accuweather_api:
             temp["date"] = whichdate
             temp["image"] = weatherimage
             temp["url"] = f"https://www.accuweather.com{url}"
-            temp["temp-hi"] = temphi
-            temp["temp-lo"] = templow
+            temp["temp-hi"] = temphi + self.unit
+            temp["temp-lo"] = templow + self.unit
             if len(weatherdesc) > 1:
                 temp['weather_day'] = weatherdesc[0]
                 temp['weather_night'] = weatherdesc[1]
@@ -97,6 +100,8 @@ class accuweather_api:
         if extrainfo := re.findall(extrainfopattern, response):
             for detail in extrainfo:
                 info[unescape(re.search(labelpattern, detail).group(1))] = unescape(re.search(valuepattern, detail).group(1))
+                if info[unescape(re.search(labelpattern, detail).group(1))].endswith("°"):
+                    info[unescape(re.search(labelpattern, detail).group(1))] += self.unit
         if breadcrumbs := re.search(r"<div class=\"crumbs\">([\s\S]*?)</div>", response):
             breadcrumbs = breadcrumbs[0]
             breadcrumbs = re.findall(r"<a href=\"(?:.*?)\" class=\"(?:.*?)\">(.*?)</a>", breadcrumbs)
@@ -116,17 +121,25 @@ class accuweather_api:
                 extrainfo = re.findall(extrainfopattern, panels)
                 for key, value in extrainfo:
                     info[key] = value
+                    if info[key].endswith("°"):
+                        info[key] += self.unit
         print(json.dumps(info, ensure_ascii=False, indent=4))
         return info
-    async def search(self, query: str, proxy: str = None) -> dict:
+    async def search(self, query: str, unit: Literal['C', 'F'] = 'C', darkmap: bool = True, proxy: str = None) -> dict:
         """
 # Arguments:
     query (str) - the search query
     
+    unit ('C' OR 'F') - temperature unit to use
+
+    darkmap (bool) - whether the radar map to be in dark mode
+
     proxy (str) - optional proxy to use
 # Returns:
     A dict object with forecasts, temperature, perticipation, alerts, and whatever accuweather provides on the site
         """
+        self.unit = unit
+        self.darkmap = darkmap
         if proxy and proxy.startswith("http"):
             self.proxy = proxy
         else:
@@ -139,4 +152,4 @@ class accuweather_api:
             info = await self._search(query)
         return info
 if __name__ == "__main__":
-    asyncio.run(accuweather_api("cache_weather.txt").search("columbia, south carolina"))
+    asyncio.run(accuweather_api("cache_weather.txt").search("columbia, south carolina", unit="F", darkmap=True))
