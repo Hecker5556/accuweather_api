@@ -6,11 +6,14 @@ from typing import Literal
 class accuweather_api:
     def __init__(self, cache_file_name: str = "cache.json"):
         self.cache = cache_file_name
+        self.unit = None
+        self.darkmap = None
+        self.proxy = None
     def _make_connector(self, proxy: str = None):
         return ProxyConnector.from_url(proxy) if proxy and proxy.startswith("socks5") else aiohttp.TCPConnector()
     async def _search(self, query: str):
         url = "https://www.accuweather.com/web-api/autocomplete"
-        headers = {
+        self.headers = {
             'accept': '*/*',
             'accept-language': 'en-US,en;q=0.8',
             'Cookie': f"awx_user=tp:{self.unit}",
@@ -34,7 +37,7 @@ class accuweather_api:
         else:
             cache = {}
         if not (key := cache.get(query)):
-            async with self.session.get(URL(f"{url}?query={query}", encoded=False), proxy=self.proxy, headers=headers) as r:
+            async with self.session.get(URL(f"{url}?query={query}", encoded=False), proxy=self.proxy, headers=self.headers) as r:
                 print(r.url)
                 autocompletes = await r.json(encoding="utf-8")
             if autocompletes:
@@ -43,7 +46,7 @@ class accuweather_api:
                     cache[query] = key
                     json.dump(cache, f1)
             else:
-                async with self.session.get(URL(f'https://www.accuweather.com/en/search-locations?query={query}', encoded=True), proxy=self.proxy, headers=headers, allow_redirects=False) as r:
+                async with self.session.get(URL(f'https://www.accuweather.com/en/search-locations?query={query}', encoded=True), proxy=self.proxy, headers=self.headers, allow_redirects=False) as r:
                     key = re.search(r"key=(.*?)&", r.headers.get("location")).group(1)
                 with open(self.cache, "w") as f1:
                     cache[query] = key
@@ -51,14 +54,14 @@ class accuweather_api:
         else:
             print('found key in cache')
         url = 'https://www.accuweather.com/web-api/three-day-redirect'
-        async with self.session.get(URL(f"{url}?key={key}",encoded=True), proxy=self.proxy, headers=headers,) as r:
+        async with self.session.get(URL(f"{url}?key={key}",encoded=True), proxy=self.proxy, headers=self.headers,) as r:
             response = await r.text("utf-8")    
-        info = {}
+        self.info = {}
         bigmappattern = r"https://api\.accuweather\.com/maps/v1/radar/static/(?:.*?)base_data=radar"
         bigmap = unescape(re.search(bigmappattern, response).group(0))
-        info['clouds_map'] = bigmap
+        self.info['clouds_map'] = bigmap
         if self.darkmap:
-            info['clouds_map'] += "&theme=dark"
+            self.info['clouds_map'] += "&theme=dark"
         futurespattern = r"<a class=\"daily-list-item (?:has-alerts)?\" href=\"(.*?)\">([\s\S]*?)</a>"
         futureweathers = re.findall(futurespattern, response)
         daypattern = re.compile(r"<p class=\"day\">(.*?)</p>")
@@ -93,38 +96,40 @@ class accuweather_api:
             temp['precipitation'] = f"{precip}%"
             forecast[f"day-{index}"] = temp
             index += 1
-        info['forecast'] = forecast
+        self.info['forecast'] = forecast
         extrainfopattern = r"<div class=\"spaced-content detail\">([\s\S]*?)</div>"
         labelpattern = r"<span class=\"label\">(.*?)</span>"
         valuepattern = r"<span class=\"value\"(?: style=\"color: (?:.*?)\")?>(.*?)</span>"
         if extrainfo := re.findall(extrainfopattern, response):
             for detail in extrainfo:
-                info[unescape(re.search(labelpattern, detail).group(1))] = unescape(re.search(valuepattern, detail).group(1))
-                if info[unescape(re.search(labelpattern, detail).group(1))].endswith("°"):
-                    info[unescape(re.search(labelpattern, detail).group(1))] += self.unit
+                self.info[unescape(re.search(labelpattern, detail).group(1))] = unescape(re.search(valuepattern, detail).group(1))
+                if self.info[unescape(re.search(labelpattern, detail).group(1))].endswith("°"):
+                    self.info[unescape(re.search(labelpattern, detail).group(1))] += self.unit
         if breadcrumbs := re.search(r"<div class=\"crumbs\">([\s\S]*?)</div>", response):
             breadcrumbs = breadcrumbs[0]
             breadcrumbs = re.findall(r"<a href=\"(?:.*?)\" class=\"(?:.*?)\">(.*?)</a>", breadcrumbs)
-            info['location'] = ">".join(map(lambda x: unescape(x), breadcrumbs))
-        async with self.session.get(info['forecast']['day-0']['url'], headers=headers, proxy=self.proxy) as r:
+            self.info['location'] = ">".join(map(lambda x: unescape(x), breadcrumbs))
+        await self._extract_extra(self.info['forecast']['day-0']['url'])
+        print(json.dumps(self.info, ensure_ascii=False, indent=4))
+        return self.info
+    async def _extract_extra(self, url: str):
+        async with self.session.get(url, headers=self.headers, proxy=self.proxy) as r:
             response = await r.text("utf-8")
         if extracontent := re.search(r"<div class=\"half-day-card-content\">([\s\S]*?)<div class=\"quarter-day-ctas\">", response):
             extracontent = extracontent[0]
-            info['weather'] = re.search(r"<div class=\"phrase\">(.*?)</div>", extracontent).group(1)
+            self.info['weather'] = re.search(r"<div class=\"phrase\">(.*?)</div>", extracontent).group(1)
             if warnings := re.search(r"<div class=\"inline-alert-subheading\">([\s\S]*?)</div>", extracontent):
-                info['warnings'] = {}
-                info['warnings']['description'] = re.search(r"<p class=\"alert-description\">(.*?)</p>", warnings[0]).group(1)
-                info['warnings']['time'] = re.search(r"<p>(.*?)</p>", warnings[0]).group(1)
+                self.info['warnings'] = {}
+                self.info['warnings']['description'] = re.search(r"<p class=\"alert-description\">(.*?)</p>", warnings[0]).group(1)
+                self.info['warnings']['time'] = re.search(r"<p>(.*?)</p>", warnings[0]).group(1)
             if panels := re.search(r'<div class=\"panels\">([\s\S]*?)$', extracontent):
                 panels = panels[0]
                 extrainfopattern = r"<p class=\"panel-item\">(.*?)<span class=\"value\">(.*?)</span></p>"
                 extrainfo = re.findall(extrainfopattern, panels)
                 for key, value in extrainfo:
-                    info[key] = value
-                    if info[key].endswith("°"):
-                        info[key] += self.unit
-        print(json.dumps(info, ensure_ascii=False, indent=4))
-        return info
+                    self.info[key] = value
+                    if self.info[key].endswith("°"):
+                        self.info[key] += self.unit
     async def search(self, query: str, unit: Literal['C', 'F'] = 'C', darkmap: bool = True, proxy: str = None) -> dict:
         """
 # Arguments:
