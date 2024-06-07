@@ -116,7 +116,7 @@ class accuweather_api:
                 extrainfo = re.findall(extrainfopattern, panels)
                 for key, value in extrainfo:
                     info[key] = value
-        print(json.dumps(info, ensure_ascii=False))
+        print(json.dumps(info, ensure_ascii=False, indent=4))
         return info
     async def search(self, query: str, proxy: str = None) -> dict:
         """
