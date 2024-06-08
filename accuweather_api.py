@@ -109,7 +109,7 @@ class accuweather_api:
             breadcrumbs = breadcrumbs[0]
             breadcrumbs = re.findall(r"<a href=\"(?:.*?)\" class=\"(?:.*?)\">(.*?)</a>", breadcrumbs)
             self.info['location'] = ">".join(map(lambda x: unescape(x), breadcrumbs))
-        self.info['temperature'] = unescape(re.search(r"<div class=\"temp\">([\s\S]*?)<span class=\"after-temp\"", response).group(1).replace("\n", "").replace("\t", ""))
+        self.info['temperature'] = unescape(re.search(r"<div class=\"temp\">([\s\S]*?)<span class=\"after-temp\"", response).group(1).replace("\n", "").replace("\t", "")) + self.unit
         await self._extract_extra(self.info['forecast']['day-0']['url'])
         print(json.dumps(self.info, ensure_ascii=False, indent=4))
         return self.info
