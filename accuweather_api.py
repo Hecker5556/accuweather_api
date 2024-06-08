@@ -3,6 +3,7 @@ from aiohttp_socks import ProxyConnector
 from yarl import URL
 from html import unescape
 from typing import Literal
+from convert_svg_icons import get_all
 class accuweather_api:
     def __init__(self, cache_file_name: str = "cache.json"):
         self.cache = cache_file_name
@@ -86,6 +87,9 @@ class accuweather_api:
             temp["date"] = whichdate
             temp["image"] = weatherimage
             temp["url"] = f"https://www.accuweather.com{url}"
+            if not os.path.exists("converted") or int(weatherimage.split('/')[-1].split('.')[0]) > 45 in os.listdir("converted"):
+                await get_all(int(weatherimage.split('/')[-1].split('.')[0]))
+            temp['filename_png'] = f"converted/{weatherimage.split('/')[-1].split('.')[0]}.png"
             temp["temp-hi"] = temphi + self.unit
             temp["temp-lo"] = templow + self.unit
             if len(weatherdesc) > 1:
