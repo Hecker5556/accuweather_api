@@ -88,7 +88,7 @@ class accuweather_api:
             temp["image"] = weatherimage
             temp["url"] = f"https://www.accuweather.com{url}"
             if not os.path.exists("converted") or int(weatherimage.split('/')[-1].split('.')[0]) > 45 in os.listdir("converted"):
-                await get_all(int(weatherimage.split('/')[-1].split('.')[0]))
+                await get_all(int(weatherimage.split('/')[-1].split('.')[0]) if int(weatherimage.split('/')[-1].split('.')[0]) > 45 else 45)
             temp['filename_png'] = f"converted/{weatherimage.split('/')[-1].split('.')[0]}.png"
             temp["temp-hi"] = temphi + self.unit
             temp["temp-lo"] = templow + self.unit
@@ -162,4 +162,4 @@ class accuweather_api:
             info = await self._search(query)
         return info
 if __name__ == "__main__":
-    asyncio.run(accuweather_api("cache_weather.txt").search("columbia, south carolina", unit="F", darkmap=True))
+    asyncio.run(accuweather_api("cache_weather.txt").search("krakow", unit="F", darkmap=True))

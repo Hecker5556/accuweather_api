@@ -17,11 +17,10 @@ async def get_all(limit: int = 45):
                         if not chunk:
                             break
                         f1.write(chunk)
-            index += 1
             print(f"downloaded {index}.svg")
-        index = 1
         for file in os.listdir("converted"):
             file = f"converted/{file}"
+            index = file.split("/")[1].split(".")[0]
             if file.endswith("png"):
                 continue
             try:
@@ -32,6 +31,5 @@ async def get_all(limit: int = 45):
             with open(f"converted/{index}.png", "wb") as f1:
                 f1.write(png)
             os.remove(file)
-            index += 1
 if __name__ == "__main__":
     asyncio.run(get_all())
