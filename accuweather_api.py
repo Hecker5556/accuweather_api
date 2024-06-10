@@ -114,27 +114,43 @@ class accuweather_api:
             breadcrumbs = re.findall(r"<a href=\"(?:.*?)\" class=\"(?:.*?)\">(.*?)</a>", breadcrumbs)
             self.info['location'] = ">".join(map(lambda x: unescape(x), breadcrumbs))
         self.info['temperature'] = unescape(re.search(r"<div class=\"temp\">([\s\S]*?)<span class=\"after-temp\"", response).group(1).replace("\n", "").replace("\t", "")) + self.unit
-        await self._extract_extra(self.info['forecast']['day-0']['url'])
+        extra = await self._extract_extra(self.info['forecast']['day-0']['url'])
+        for key, value in extra.items():
+            self.info[key] = value
         print(json.dumps(self.info, ensure_ascii=False, indent=4))
         return self.info
     async def _extract_extra(self, url: str):
-        async with self.session.get(url, headers=self.headers, proxy=self.proxy) as r:
-            response = await r.text("utf-8")
+        """
+# Helper function for extracting additional info from a forecast url
+
+Example url: [https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tomorrow/2-274455_1_al](https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tomorrow/2-274455_1_al)
+        """
+        if hasattr(self, "session") or self.session:
+            async with self.session.get(url, headers=self.headers, proxy=self.proxy) as r:
+                response = await r.text("utf-8")
+        else:
+            async with aiohttp.ClientSession(connector=self._make_connector(self.proxy)) as session:
+                async with session.get(url, headers=self.headers, proxy=self.proxy) as r:
+                    response = await r.text("utf-8")
         if extracontent := re.search(r"<div class=\"half-day-card-content\">([\s\S]*?)<div class=\"quarter-day-ctas\">", response):
             extracontent = extracontent[0]
-            self.info['weather'] = re.search(r"<div class=\"phrase\">(.*?)</div>", extracontent).group(1)
+            result = {}
+            result['weather'] = re.search(r"<div class=\"phrase\">(.*?)</div>", extracontent).group(1)
             if warnings := re.search(r"<div class=\"inline-alert-subheading\">([\s\S]*?)</div>", extracontent):
-                self.info['warnings'] = {}
-                self.info['warnings']['description'] = re.search(r"<p class=\"alert-description\">(.*?)</p>", warnings[0]).group(1)
-                self.info['warnings']['time'] = re.search(r"<p>(.*?)</p>", warnings[0]).group(1)
+                result['warnings'] = {}
+                result['warnings']['description'] = re.search(r"<p class=\"alert-description\">(.*?)</p>", warnings[0]).group(1)
+                result['warnings']['time'] = re.search(r"<p>(.*?)</p>", warnings[0]).group(1)
             if panels := re.search(r'<div class=\"panels\">([\s\S]*?)$', extracontent):
                 panels = panels[0]
                 extrainfopattern = r"<p class=\"panel-item\">(.*?)<span class=\"value\">(.*?)</span></p>"
                 extrainfo = re.findall(extrainfopattern, panels)
                 for key, value in extrainfo:
-                    self.info[key] = value
-                    if self.info[key].endswith("°"):
-                        self.info[key] += self.unit
+                    result[key] = value
+                    if result[key].endswith("°"):
+                        result[key] += self.unit
+            return result
+        else:
+            return {}
     async def search(self, query: str, unit: Literal['C', 'F'] = 'C', darkmap: bool = True, proxy: str = None) -> dict:
         """
 # Arguments:
@@ -162,4 +178,4 @@ class accuweather_api:
             info = await self._search(query)
         return info
 if __name__ == "__main__":
-    asyncio.run(accuweather_api("cache_weather.txt").search("krakow", unit="F", darkmap=True))
+    asyncio.run(accuweather_api("cache_weather.txt").search("krakow", unit="C", darkmap=True))
