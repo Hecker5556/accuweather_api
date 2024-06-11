@@ -7,17 +7,12 @@ from convert_svg_icons import get_all
 class accuweather_api:
     def __init__(self, cache_file_name: str = "cache.json"):
         self.cache = cache_file_name
-        self.unit = None
+        self.unit = "C"
         self.darkmap = None
         self.proxy = None
-    def _make_connector(self, proxy: str = None):
-        return ProxyConnector.from_url(proxy) if proxy and proxy.startswith("socks5") else aiohttp.TCPConnector()
-    async def _search(self, query: str):
-        url = "https://www.accuweather.com/web-api/autocomplete"
         self.headers = {
             'accept': '*/*',
             'accept-language': 'en-US,en;q=0.8',
-            'Cookie': f"awx_user=tp:{self.unit}",
             'priority': 'u=1, i',
             'referer': 'https://www.accuweather.com/',
             'sec-ch-ua': '"Brave";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
@@ -29,6 +24,10 @@ class accuweather_api:
             'sec-gpc': '1',
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
         }
+    def _make_connector(self, proxy: str = None):
+        return ProxyConnector.from_url(proxy) if proxy and proxy.startswith("socks5") else aiohttp.TCPConnector()
+    async def _search(self, query: str):
+        url = "https://www.accuweather.com/web-api/autocomplete"
         if os.path.exists(self.cache):
             with open(self.cache, "r") as f1:
                 try:
@@ -125,7 +124,8 @@ class accuweather_api:
 
 Example url: [https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tomorrow/2-274455_1_al](https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tomorrow/2-274455_1_al)
         """
-        if hasattr(self, "session") or self.session:
+        self.headers['Cookies'] = f"awx_user=tp:{self.unit}"
+        if hasattr(self, "session") and self.session:
             async with self.session.get(url, headers=self.headers, proxy=self.proxy) as r:
                 response = await r.text("utf-8")
         else:
@@ -148,6 +148,9 @@ Example url: [https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tom
                     result[key] = value
                     if result[key].endswith("°"):
                         result[key] += self.unit
+            if temps := re.search(r"<div class=\"temperature\">([\s\S]*?)<span class", response):
+                temps = unescape(temps.group(1)).strip() + self.unit
+                result['temperature'] = temps
             return result
         else:
             return {}
@@ -165,6 +168,7 @@ Example url: [https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tom
     A dict object with forecasts, temperature, perticipation, alerts, and whatever accuweather provides on the site
         """
         self.unit = unit
+        self.headers['Cookies'] = f"awx_user=tp:{self.unit}"
         self.darkmap = darkmap
         if proxy and proxy.startswith("http"):
             self.proxy = proxy
