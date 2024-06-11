@@ -125,7 +125,7 @@ class accuweather_api:
 Example url: [https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tomorrow/2-274455_1_al](https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tomorrow/2-274455_1_al)
         """
         self.headers['Cookies'] = f"awx_user=tp:{self.unit}"
-        if hasattr(self, "session") and self.session:
+        if hasattr(self, "session") and self.session and not self.session.closed:
             async with self.session.get(url, headers=self.headers, proxy=self.proxy) as r:
                 response = await r.text("utf-8")
         else:
