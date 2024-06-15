@@ -124,7 +124,7 @@ class accuweather_api:
 
 Example url: [https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tomorrow/2-274455_1_al](https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tomorrow/2-274455_1_al)
         """
-        self.headers['Cookies'] = f"awx_user=tp:{self.unit}"
+        self.headers['Cookie'] = f"awx_user=tp:{self.unit}"
         if hasattr(self, "session") and self.session and not self.session.closed:
             async with self.session.get(url, headers=self.headers, proxy=self.proxy) as r:
                 response = await r.text("utf-8")
@@ -168,7 +168,7 @@ Example url: [https://www.accuweather.com/en/pl/krakow/2-274455_1_al/weather-tom
     A dict object with forecasts, temperature, perticipation, alerts, and whatever accuweather provides on the site
         """
         self.unit = unit
-        self.headers['Cookies'] = f"awx_user=tp:{self.unit}"
+        self.headers['Cookie'] = f"awx_user=tp:{self.unit}"
         self.darkmap = darkmap
         if proxy and proxy.startswith("http"):
             self.proxy = proxy
